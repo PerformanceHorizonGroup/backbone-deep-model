@@ -20,22 +20,29 @@ var cloneDeep = require('lodash.clonedeep');
  */
 function objToPaths(obj) {
 	var ret = {},
-		separator = DeepModel.keyPathSeparator;
+		separator = DeepModel.keyPathSeparator,
+		useArray;	// if the keys are to be treated as array indexes
+
+	if(DeepModel.keyPathUseArrayIndex)
+		 useArray = obj && (obj.constructor === Array);
 
 	for (var key in obj) {
-		var val = obj[key];
+		var val = obj[key],
+			retKey = useArray ? '['+key+']' : key;
 
 		if (val && (val.constructor === Object || val.constructor === Array) && !_.isEmpty(val)) {
 			//Recursion for embedded objects
-			var obj2 = objToPaths(val);
+			var obj2 = objToPaths(val),
+				valIsArray = (DeepModel.keyPathUseArrayIndex && (val.constructor === Array));	// if the val keys in obj2 are to be treated as array indexes
 
 			for (var key2 in obj2) {
-				var val2 = obj2[key2];
+				var val2 = obj2[key2],
+					compKey = valIsArray ? (retKey + key2) : (retKey + separator + key2);
 
-				ret[key + separator + key2] = val2;
+				ret[compKey] = val2;
 			}
 		} else {
-			ret[key] = val;
+			ret[retKey] = val;
 		}
 	}
 
@@ -50,9 +57,17 @@ function objToPaths(obj) {
  * @return {mixed}                [description]
  */
 function getNested(obj, path, return_exists) {
-	var separator = DeepModel.keyPathSeparator;
+	var separator = DeepModel.keyPathSeparator,
+		fields;
 
-	var fields = path ? path.split(separator) : [];
+	if(path){
+		if(DeepModel.keyPathUseArrayIndex)
+			fields = path.match(RegExp('[^\\'+separator+'\\[\\]]+', 'g'));
+		else
+			fields = path.split(separator);
+	}else
+		fields = [];
+
 	var result = obj;
 	return_exists || (return_exists === false);
 	for (var i = 0, n = fields.length; i < n; i++) {
@@ -90,12 +105,12 @@ function getNested(obj, path, return_exists) {
 function setNested(obj, path, val, options) {
 	options = options || {};
 
-	var separator = DeepModel.keyPathSeparator;
+	var separator = DeepModel.keyPathSeparator,
+		fields = path ? (separator+path).match(RegExp('((^|\\'+separator+')[^\\'+separator+'\\[]+)|(\\[[^\\]]+)', 'g')) : [];	// each field will start with <separator> or [ to signify the type of index
 
-	var fields = path ? path.split(separator) : [];
 	var result = obj;
 	for (var i = 0, n = fields.length; i < n && result !== undefined; i++) {
-		var field = fields[i];
+		var field = fields[i].substr(1);	// remove the leading separator character
 
 		//If the last in the path, set the value
 		if (i === n - 1) {
@@ -110,10 +125,9 @@ function setNested(obj, path, val, options) {
 					delete result[field]; // in case parent exists but is not an object
 					return;
 				}
-				var nextField = fields[i + 1];
 
-				// create array if next field is integer, else create object
-				result[field] = /^\d+$/.test(nextField) ? [] : {};
+				// create array if next field is array index, else create object
+				result[field] = fields[i + 1].charAt(0)=='[' ? [] : {};
 			}
 
 			//Move onto the next part of the path
@@ -225,11 +239,13 @@ var DeepModel = Backbone.Model.extend({
 					this.trigger('change:' + key, this, getNested(current, key), options);
 				} // * @restorer
 
-				var fields = key.split(separator);
+				var parentKey = key,
+					parentKeyReplaceRe = new RegExp('(\\[[^\\]]+\\]|\\'+separator+'?[^\\'+separator+'\\[]+)$');
 
 				//Trigger change events for parent keys with wildcard (*) notation
-				for (var n = fields.length - 1; n > 0; n--) {
-					var parentKey = fields.slice(0, n).join(separator),
+				while( (parentKey = parentKey.replace(parentKeyReplaceRe, '')) ){	// while there is a parent part in the key path
+//				for (var n = fields.length - 1; n > 0; n--) {
+					var //parentKey = fields.slice(0, n).join(separator),
 						wildcardKey = parentKey + separator + '*';
 
 					if (!alreadyTriggered.hasOwnProperty(wildcardKey) || !alreadyTriggered[wildcardKey]) { // * @restorer
@@ -326,6 +342,7 @@ var DeepModel = Backbone.Model.extend({
 
 //Config; override in your app to customise
 DeepModel.keyPathSeparator = '.';
+DeepModel.keyPathUseArrayIndex = false;
 
 
 module.exports = DeepModel;
