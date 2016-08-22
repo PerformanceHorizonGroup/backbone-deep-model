@@ -179,5 +179,13 @@ describe('DeepModel', function() {
 			expect(model.attributes.date).to.be.instanceof(Date);
 		});
 
+		it("set: Objects with decimal-like keys ", function() {
+			var model = new DeepModel();
+			model.set({
+				'4.5': 4.5
+			});
+			expect(model.attributes['4.5']).to.equal(4.5);
+		});
+
 	});
 });
