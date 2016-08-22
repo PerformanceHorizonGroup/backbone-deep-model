@@ -180,11 +180,17 @@ describe('DeepModel', function() {
 		});
 
 		it("set: Objects with decimal-like keys ", function() {
-			var model = new DeepModel();
+			var model = new DeepModel(),
+				origOpt = DeepModel.keyPathUseArrayIndex; // save option value
+			
+			DeepModel.keyPathUseArrayIndex = true;
+			
 			model.set({
 				'4.5': 4.5
 			});
 			expect(model.attributes['4.5']).to.equal(4.5);
+
+			DeepModel.keyPathUseArrayIndex = true; // restore
 		});
 
 	});
